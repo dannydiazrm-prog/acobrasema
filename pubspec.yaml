@@ -1,4 +1,4 @@
-name: acobra-sema
+name: acobra_sema
 description: "Aplicación de control de préstamos simple y moderna"
 publish_to: 'none'
 version: 1.0.0+1
@@ -15,8 +15,20 @@ dependencies:
   shared_preferences: ^2.2.2
   share_plus: ^9.0.0
   provider: ^6.1.2
+  path_provider: ^2.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/icono.jpg"
