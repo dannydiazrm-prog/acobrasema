@@ -14,11 +14,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
-    }
+    // ❌ Elimina el bloque kotlinOptions { compilerOptions { ... } } de aquí
 
     defaultConfig {
         applicationId = "com.jplabs.acobrasemaaa"
@@ -43,6 +39,13 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
         }
+    }
+}
+
+// ✅ Bloque kotlin a nivel superior (fuera de android)
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
