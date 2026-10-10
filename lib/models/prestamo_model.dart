@@ -32,9 +32,9 @@ class CuotaModel {
 
 class PrestamoModel {
   final String id;
-  final String clienteNombre;
-  final double montoPrestado;
-  final double montoTotal;
+  String clienteNombre;
+  double montoPrestado;
+  double montoTotal;
   final DateTime fechaCreacion;
   List<CuotaModel> cuotas;
 

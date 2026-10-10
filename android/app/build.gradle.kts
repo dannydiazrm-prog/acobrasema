@@ -7,14 +7,12 @@ plugins {
 android {
     namespace = "com.jplabs.acobrasemaaa"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    // ❌ Elimina el bloque kotlinOptions { compilerOptions { ... } } de aquí
 
     defaultConfig {
         applicationId = "com.jplabs.acobrasemaaa"
@@ -42,7 +40,6 @@ android {
     }
 }
 
-// ✅ Bloque kotlin a nivel superior (fuera de android)
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
