@@ -175,9 +175,27 @@ class DetallePrestamoScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Pendiente: ${CurrencyFormatter.format(cuota.montoPendiente)}',
-              style: AppText.body.copyWith(color: AppColors.textSecondary),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppRadius.medium),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  _filaInfo(
+                    'Pendiente cuota',
+                    CurrencyFormatter.format(cuota.montoPendiente),
+                  ),
+                  const SizedBox(height: 4),
+                  _filaInfo(
+                    'Saldo total del préstamo',
+                    CurrencyFormatter.format(p.saldoPendiente),
+                    bold: true,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -218,9 +236,9 @@ class DetallePrestamoScreen extends StatelessWidget {
     if (monto == null || monto <= 0) return;
     if (!context.mounted) return;
 
-    // Bug 7: validar que no supere el pendiente.
-    if (monto > cuota.montoPendiente) {
-      AppToast.error(context, 'El monto no puede superar el pendiente');
+    // Validación contra el saldo TOTAL del préstamo, no contra la cuota.
+    if (monto > p.saldoPendiente) {
+      AppToast.error(context, 'El monto supera el saldo pendiente del préstamo');
       return;
     }
 
@@ -238,10 +256,25 @@ class DetallePrestamoScreen extends StatelessWidget {
         AppToast.success(context, 'Abono registrado');
         break;
       case PrestamoProvider.abonoExcedePendiente:
-        AppToast.error(context, 'El monto supera el pendiente');
+        AppToast.error(context, 'El monto supera el saldo pendiente');
         break;
       default:
         AppToast.error(context, 'No se pudo registrar el abono');
     }
+  }
+
+  Widget _filaInfo(String label, String value, {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppText.caption),
+        Text(
+          value,
+          style: AppText.body.copyWith(
+            fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -24,6 +24,10 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
 
   List<double> _montosCuotas = [];
 
+  /// Índices de cuotas que el usuario editó manualmente.
+  /// Esas cuotas quedan fijas y no se tocan al redistribuir.
+  final Set<int> _cuotasEditadas = {};
+
   @override
   void dispose() {
     _nombreCtrl.dispose();
@@ -45,42 +49,72 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
     final suma = montos.fold(0.0, (s, v) => s + v);
     montos[n - 1] += total - suma;
 
-    setState(() => _montosCuotas = montos);
+    setState(() {
+      _montosCuotas = montos;
+      _cuotasEditadas.clear();
+    });
   }
 
-  /// Edita una cuota manualmente, redistribuyendo el resto.
-  /// El monto no puede superar el monto total a devolver.
+  /// Máximo que puede tener la cuota `index` considerando las demás
+  /// cuotas ya fijadas (editadas manualmente).
+  double _maximoParaCuota(int index) {
+    final total = CurrencyFormatter.parse(_devolverCtrl.text);
+    if (total <= 0) return 0;
+
+    double sumaFijas = 0;
+    for (int i = 0; i < _montosCuotas.length; i++) {
+      if (i != index && _cuotasEditadas.contains(i)) {
+        sumaFijas += _montosCuotas[i];
+      }
+    }
+    return (total - sumaFijas).clamp(0, total);
+  }
+
+  /// Edita una cuota manualmente, redistribuyendo solo entre las no editadas.
   void _editarCuotaManual(int index, double nuevoMonto) {
     final total = CurrencyFormatter.parse(_devolverCtrl.text);
     if (total <= 0) return;
 
-    // Cap: no puede superar el total.
-    if (nuevoMonto > total) nuevoMonto = total;
-    if (nuevoMonto <= 0) return;
+    final maximo = _maximoParaCuota(index);
+    if (nuevoMonto > maximo) nuevoMonto = maximo;
+    if (nuevoMonto < 0) return;
 
-    final restante = total - nuevoMonto;
-    final otrasCuotas = _montosCuotas.length - 1;
+    final nuevos = List<double>.from(_montosCuotas);
+    nuevos[index] = nuevoMonto;
+    _cuotasEditadas.add(index);
 
-    if (otrasCuotas == 0) {
-      setState(() => _montosCuotas[index] = nuevoMonto);
+    // Cuotas que todavía no fueron editadas (excluyendo la actual).
+    final noEditadas = <int>[];
+    for (int i = 0; i < nuevos.length; i++) {
+      if (i != index && !_cuotasEditadas.contains(i)) {
+        noEditadas.add(i);
+      }
+    }
+
+    // Cuánto queda por repartir después de fijar las editadas.
+    double sumaFijas = 0;
+    for (int i = 0; i < nuevos.length; i++) {
+      if (_cuotasEditadas.contains(i)) sumaFijas += nuevos[i];
+    }
+    final restante = total - sumaFijas;
+
+    if (noEditadas.isEmpty) {
+      // No hay más cuotas libres: solo actualizamos el valor.
+      setState(() => _montosCuotas = nuevos);
       return;
     }
 
-    final montoPorOtra = restante / otrasCuotas;
-    final nuevos = List<double>.from(_montosCuotas);
-    nuevos[index] = nuevoMonto;
-
-    for (int i = 0; i < nuevos.length; i++) {
-      if (i != index) nuevos[i] = montoPorOtra.floorToDouble();
+    // Repartir el restante entre las no editadas.
+    final montoPorOtra = restante / noEditadas.length;
+    for (final i in noEditadas) {
+      nuevos[i] = montoPorOtra.floorToDouble();
     }
 
+    // Ajuste de redondeo: la última no editada absorbe la diferencia.
     final suma = nuevos.fold(0.0, (s, v) => s + v);
     final dif = total - suma;
-    for (int i = nuevos.length - 1; i >= 0; i--) {
-      if (i != index) {
-        nuevos[i] += dif;
-        break;
-      }
+    if (dif != 0) {
+      nuevos[noEditadas.last] += dif;
     }
 
     setState(() => _montosCuotas = nuevos);
@@ -89,7 +123,7 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Filtrar cuotas con monto 0 (por si el usuario cargó todo en una sola).
+    // Filtrar cuotas con monto 0.
     final cuotasValidas = _montosCuotas.where((m) => m > 0).toList();
 
     if (cuotasValidas.isEmpty) {
@@ -202,10 +236,11 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
                       children: [
                         Text('Cuotas', style: AppText.subtitle),
                         const Spacer(),
-                        Text(
-                          'Tocá para ajustar',
-                          style: AppText.caption.copyWith(color: AppColors.teal),
-                        ),
+                        if (_montosCuotas.length > 1)
+                          Text(
+                            'Tocá para ajustar',
+                            style: AppText.caption.copyWith(color: AppColors.teal),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -228,13 +263,17 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
 
   Widget _cuotaEditable(int index) {
     final monto = _montosCuotas[index];
+    final editada = _cuotasEditadas.contains(index);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: editada ? AppColors.teal.withOpacity(0.06) : AppColors.background,
         borderRadius: BorderRadius.circular(AppRadius.medium),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: editada ? AppColors.teal.withOpacity(0.3) : AppColors.border,
+        ),
       ),
       child: Row(
         children: [
@@ -242,13 +281,16 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppColors.navy,
+              color: editada ? AppColors.teal : AppColors.navy,
               borderRadius: BorderRadius.circular(AppRadius.small),
             ),
             alignment: Alignment.center,
             child: Text(
               '${index + 1}',
-              style: AppText.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+              style: AppText.caption.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -258,65 +300,84 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
               style: AppText.body.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          TextButton(
-            onPressed: () => _editarMontoCuota(index, monto),
-            child: Text('Editar', style: AppText.caption.copyWith(color: AppColors.teal)),
-          ),
+          if (_montosCuotas.length > 1)
+            TextButton(
+              onPressed: () => _editarMontoCuota(index, monto),
+              child: Text(
+                'Editar',
+                style: AppText.caption.copyWith(color: AppColors.teal),
+              ),
+            ),
         ],
       ),
     );
   }
 
   void _editarMontoCuota(int index, double actual) {
-    final total = CurrencyFormatter.parse(_devolverCtrl.text);
-    final ctrl = TextEditingController(text: CurrencyFormatter.formatNumber(actual));
+    final maximo = _maximoParaCuota(index);
+    final ctrl = TextEditingController(
+      text: CurrencyFormatter.formatNumber(actual),
+    );
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.large)),
-        title: Text('Cuota ${index + 1}', style: AppText.title.copyWith(fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Máximo: ${CurrencyFormatter.format(total)}',
-              style: AppText.caption,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) {
+          final montoActual = CurrencyFormatter.parse(ctrl.text);
+          final excede = montoActual > maximo;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.large),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              autofocus: true,
-              onChanged: (v) {
-                final formatted = CurrencyFormatter.formatInput(v);
-                ctrl.value = TextEditingValue(
-                  text: formatted,
-                  selection: TextSelection.collapsed(offset: formatted.length),
-                );
-              },
-              decoration: const InputDecoration(labelText: 'Monto', suffixText: '₲'),
+            title: Text('Cuota ${index + 1}', style: AppText.title.copyWith(fontSize: 18)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Máximo: ${CurrencyFormatter.format(maximo)}',
+                  style: AppText.caption.copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  autofocus: true,
+                  onChanged: (v) {
+                    final formatted = CurrencyFormatter.formatInput(v);
+                    ctrl.value = TextEditingValue(
+                      text: formatted,
+                      selection: TextSelection.collapsed(offset: formatted.length),
+                    );
+                    setDialogState(() {});
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Monto',
+                    suffixText: '₲',
+                    errorText: excede ? 'Supera el máximo permitido' : null,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final nuevo = CurrencyFormatter.parse(ctrl.text);
-              if (nuevo > 0) {
-                _editarCuotaManual(index, nuevo);
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Aceptar'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: excede || montoActual <= 0
+                    ? null
+                    : () {
+                        _editarCuotaManual(index, montoActual);
+                        Navigator.pop(dialogContext);
+                      },
+                child: const Text('Aceptar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

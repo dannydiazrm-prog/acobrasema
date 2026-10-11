@@ -81,13 +81,62 @@ class AjustesScreen extends StatelessWidget {
   }
 
   Future<void> _forzarRecordatorio(BuildContext context) async {
-    final provider = Provider.of<PrestamoProvider>(context, listen: false);
-    await provider.marcarRespaldoHecho();
-    // Simulamos "hace 10 días" para que el próximo chequeo dispare.
-    // No podemos falsear la fecha acá sin tocar prefs, así que solo avisamos:
-    if (!context.mounted) return;
-    AppToast.info(context, 'Recordatorio programado para próximo inicio');
+  final quiereRespaldar = await showDialog<bool>(
+    context: context,
+    builder: (_) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.large),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.teal.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.backup_rounded, color: AppColors.teal, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text('Respaldá tus datos', style: AppText.title.copyWith(fontSize: 20)),
+            const SizedBox(height: 8),
+            Text(
+              'Pasó una semana desde el último respaldo. Si se rompe el celular, podés perder todo.',
+              style: AppText.body.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Más tarde'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Respaldar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  if (!context.mounted) return;
+  if (quiereRespaldar == true) {
+    await _exportar(context);
   }
+}
 
   @override
   Widget build(BuildContext context) {
