@@ -23,6 +23,10 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
 
   late List<CuotaModel> _cuotas;
 
+  /// Monto pagado REAL, capturado al abrir la pantalla.
+  /// No cambia aunque el usuario modifique el monto a devolver.
+  late final double _montoPagado;
+
   @override
   void initState() {
     super.initState();
@@ -33,14 +37,59 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
     _devolverCtrl = TextEditingController(
       text: CurrencyFormatter.formatNumber(widget.prestamo.montoTotal),
     );
-    _cuotas = widget.prestamo.cuotas
+
+    // Capturamos el pagado real ANTES de tocar nada.
+    _montoPagado = widget.prestamo.totalPagado;
+
+    // Copia de las cuotas, con montos verificados.
+    final cuotasOriginales = widget.prestamo.cuotas;
+    final pagadas = cuotasOriginales.where((c) => c.estaPagada).toList();
+    final pendientesOriginales =
+        cuotasOriginales.where((c) => !c.estaPagada).toList();
+
+    final pendienteReal = widget.prestamo.montoTotal - _montoPagado;
+    final sumaPendientesActual = pendientesOriginales.fold(
+      0.0,
+      (s, c) => s + c.montoPendiente,
+    );
+    final desfase = (sumaPendientesActual - pendienteReal).abs();
+
+    _cuotas = pagadas
         .map((c) => CuotaModel(
               numero: c.numero,
               montoOriginal: c.montoOriginal,
-              montoPendiente: c.montoPendiente,
-              estaPagada: c.estaPagada,
+              montoPendiente: 0,
+              estaPagada: true,
             ))
         .toList();
+
+    if (desfase > 1) {
+      // Regenerar pendientes para que sumen exacto.
+      if (pendientesOriginales.isNotEmpty && pendienteReal > 0) {
+        final base =
+            (pendienteReal / pendientesOriginales.length).floorToDouble();
+        double suma = 0;
+        for (int i = 0; i < pendientesOriginales.length; i++) {
+          final esUltima = i == pendientesOriginales.length - 1;
+          final monto = esUltima ? pendienteReal - suma : base;
+          _cuotas.add(CuotaModel(
+            numero: _cuotas.length + 1,
+            montoOriginal: monto,
+            montoPendiente: monto,
+          ));
+          suma += monto;
+        }
+      }
+    } else {
+      // Respetar montos personalizados.
+      for (final c in pendientesOriginales) {
+        _cuotas.add(CuotaModel(
+          numero: _cuotas.length + 1,
+          montoOriginal: c.montoOriginal,
+          montoPendiente: c.montoPendiente,
+        ));
+      }
+    }
   }
 
   @override
@@ -58,9 +107,6 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
       .where((c) => !c.estaPagada)
       .fold(0.0, (s, c) => s + c.montoPendiente);
 
-  /// Total pagado real = total a devolver - pendiente.
-  double get _montoPagado => _totalActual - _pendienteActual;
-
   List<CuotaModel> get _pendientes =>
       _cuotas.where((c) => !c.estaPagada).toList();
 
@@ -69,6 +115,7 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
     final pendientes = _pendientes;
     if (pendientes.isEmpty) return;
 
+    // Usar SIEMPRE el pagado real capturado al inicio.
     final montoRedistribuir = total - _montoPagado;
     if (montoRedistribuir <= 0) return;
 

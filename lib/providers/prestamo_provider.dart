@@ -118,9 +118,10 @@ class PrestamoProvider with ChangeNotifier {
     final cuota = prestamo.cuotas[cuotaIdx];
 
     if (montoAbonado > cuota.montoPendiente) {
-      // Pago con excedente: cierra esta cuota y el excedente se
-      // aplica a la siguiente (reduciendo su pendiente).
+      // Pago con excedente: cierra esta cuota con lo que el usuario pagó
+      // realmente (para que la UI muestre lo abonado, no el pactado).
       final excedente = montoAbonado - cuota.montoPendiente;
+      cuota.montoOriginal = montoAbonado;
       cuota.montoPendiente = 0;
       cuota.estaPagada = true;
 
@@ -130,7 +131,7 @@ class PrestamoProvider with ChangeNotifier {
           // El excedente cubre también la siguiente. Recurse.
           await registrarAbonoCuota(prestamoId, siguiente.numero, excedente);
         } else {
-          // Solo reducir el pendiente de la siguiente.
+          // Solo reducir el pendiente y el original de la siguiente.
           siguiente.montoOriginal -= excedente;
           siguiente.montoPendiente -= excedente;
         }
