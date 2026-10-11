@@ -17,13 +17,55 @@ class DetallePrestamoScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<PrestamoProvider>(
       builder: (context, provider, _) {
-        final list = provider.prestamos.where((p) => p.id == prestamoId);
+        final list = provider.prestamos.where((p) => p.id == prestamoId).toList();
+
+        // Si el préstamo ya no existe (se liquidó o se eliminó), mostramos
+        // una pantalla con un mensaje y botón de volver. NO hacemos pop acá.
         if (list.isEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (Navigator.canPop(context)) Navigator.pop(context);
-          });
-          return const Scaffold(body: SizedBox.shrink());
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(title: const Text('Préstamo')),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_rounded, color: AppColors.success, size: 48),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Préstamo finalizado',
+                      style: AppText.title,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Este préstamo ya no está en tu lista.',
+                      style: AppText.body.copyWith(color: AppColors.textSecondary),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Volver'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
         }
+
         final p = list.first;
 
         return Scaffold(
@@ -128,10 +170,14 @@ class DetallePrestamoScreen extends StatelessWidget {
     );
   }
 
-  void _abrirAbono(BuildContext context, PrestamoModel p, CuotaModel cuota) {
+  Future<void> _abrirAbono(
+    BuildContext context,
+    PrestamoModel p,
+    CuotaModel cuota,
+  ) async {
     final ctrl = TextEditingController(text: cuota.montoPendiente.toStringAsFixed(0));
 
-    showDialog(
+    final monto = await showDialog<double>(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.large)),
@@ -160,23 +206,31 @@ class DetallePrestamoScreen extends StatelessWidget {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               final monto = CurrencyFormatter.parse(ctrl.text);
-              if (monto <= 0) return;
-              Navigator.pop(context);
-              final liquidado = await Provider.of<PrestamoProvider>(context, listen: false)
-                  .registrarAbonoCuota(p.id, cuota.numero, monto);
-              if (!context.mounted) return;
-              if (liquidado) {
-                await AppDialogs.prestamoTerminado(context, p.clienteNombre);
-              } else {
-                AppToast.success(context, 'Abono registrado');
-              }
+              Navigator.pop(context, monto);
             },
             child: const Text('Confirmar'),
           ),
         ],
       ),
     );
+
+    if (monto == null || monto <= 0) return;
+    if (!context.mounted) return;
+
+    final liquidado = await Provider.of<PrestamoProvider>(context, listen: false)
+        .registrarAbonoCuota(p.id, cuota.numero, monto);
+
+    if (!context.mounted) return;
+
+    if (liquidado) {
+      await AppDialogs.prestamoTerminado(context, p.clienteNombre);
+      if (context.mounted) {
+        Navigator.pop(context); // Volver al dashboard
+      }
+    } else {
+      AppToast.success(context, 'Abono registrado');
+    }
   }
 }

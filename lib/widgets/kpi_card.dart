@@ -6,7 +6,6 @@ class KpiCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-  final bool highlighted;
 
   const KpiCard({
     super.key,
@@ -14,7 +13,6 @@ class KpiCard extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
-    this.highlighted = false,
   });
 
   @override
@@ -22,25 +20,10 @@ class KpiCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: highlighted
-            ? LinearGradient(
-                colors: [color, Color.lerp(color, Colors.black, 0.15)!],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        color: highlighted ? null : AppColors.surface,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.medium),
-        border: highlighted ? null : Border.all(color: AppColors.border),
-        boxShadow: highlighted
-            ? [
-                BoxShadow(
-                  color: color.withOpacity(0.25),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : AppShadows.soft,
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.soft,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,27 +34,16 @@ class KpiCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: highlighted
-                      ? Colors.white.withOpacity(0.2)
-                      : color.withOpacity(0.1),
+                  color: color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
-                  size: 14,
-                  color: highlighted ? Colors.white : color,
-                ),
+                child: Icon(icon, size: 14, color: color),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   label,
-                  style: AppText.caption.copyWith(
-                    color: highlighted
-                        ? Colors.white.withOpacity(0.9)
-                        : AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
+                  style: AppText.caption.copyWith(fontSize: 11),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -84,9 +56,9 @@ class KpiCard extends StatelessWidget {
             child: Text(
               value,
               style: AppText.subtitle.copyWith(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: highlighted ? Colors.white : AppColors.textPrimary,
+                color: color,
               ),
             ),
           ),

@@ -112,7 +112,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Image.asset('assets/images/acobrasema.png', height: 32, fit: BoxFit.contain),
+        title: Image.asset(
+          'assets/images/acobrasema.png',
+          height: 46,
+          fit: BoxFit.contain,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
@@ -138,7 +142,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: CurrencyFormatter.format(totalPrestado),
                     icon: Icons.account_balance_wallet_outlined,
                     color: AppColors.navy,
-                    highlighted: true,
                   ),
                 ),
                 const SizedBox(width: 10),

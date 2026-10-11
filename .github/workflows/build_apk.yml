@@ -31,6 +31,9 @@ jobs:
       - name: Instalar dependencias de Flutter
         run: flutter pub get
 
+      - name: Generar íconos de la app
+        run: dart run flutter_launcher_icons
+
       - name: Decodificar y restaurar Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
