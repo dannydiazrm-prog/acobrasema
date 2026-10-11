@@ -42,7 +42,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.large)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.large),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -69,13 +71,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Expanded(
                     child: TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Más tarde'),
+                      child: Text(
+                        'Más tarde',
+                        style: AppText.body.copyWith(fontSize: 13),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      ),
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.push(
@@ -83,7 +94,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           MaterialPageRoute(builder: (_) => const AjustesScreen()),
                         );
                       },
-                      child: const Text('Respaldar'),
+                      child: Text(
+                        'Respaldar',
+                        style: AppText.body.copyWith(
+                          fontSize: 13,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -110,12 +128,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        toolbarHeight: 76,
-        title: Image.asset(
-          'assets/images/acobrasema.png',
-          height: 48,
-          fit: BoxFit.contain,
+        toolbarHeight: 96,
+        title: const SizedBox(
+          height: 60,
+          width: 220,
+          child: Image(
+            image: AssetImage('assets/images/acobrasema.png'),
+            fit: BoxFit.contain,
+          ),
         ),
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),

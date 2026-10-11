@@ -51,10 +51,6 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────────────────
-  // GETTERS
-  // ─────────────────────────────────────────────────────────
-
   double get _prestadoActual => CurrencyFormatter.parse(_prestadoCtrl.text);
   double get _totalActual => CurrencyFormatter.parse(_devolverCtrl.text);
 
@@ -69,10 +65,8 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
   List<CuotaModel> get _pendientes =>
       _cuotas.where((c) => !c.estaPagada).toList();
 
-  // ─────────────────────────────────────────────────────────
-  // LÓGICA
-  // ─────────────────────────────────────────────────────────
-
+  /// Redistribuye el monto pendiente (total - pagado) entre TODAS las cuotas
+  /// no pagadas de forma equitativa.
   void _redistribuirPendientes() {
     final total = _totalActual;
     final pendientes = _pendientes;
@@ -104,24 +98,17 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
       _prestadoCtrl.text = CurrencyFormatter.formatNumber(nuevoPrestado);
       _devolverCtrl.text = CurrencyFormatter.formatNumber(nuevoTotal);
 
-      if (numCuotas > 0 && aDevolverAdicional > 0) {
-        // Agregar cuotas nuevas al final con el monto adicional.
-        final base = (aDevolverAdicional / numCuotas).floorToDouble();
-        double suma = 0;
-        for (int i = 0; i < numCuotas; i++) {
-          final esUltima = i == numCuotas - 1;
-          final monto = esUltima ? aDevolverAdicional - suma : base;
-          _cuotas.add(CuotaModel(
-            numero: _cuotas.length + 1,
-            montoOriginal: monto,
-            montoPendiente: monto,
-          ));
-          suma += monto;
-        }
-      } else {
-        // 0 cuotas nuevas: redistribuir el total entre las pendientes.
-        _redistribuirPendientes();
+      // Si se agregaron cuotas nuevas, las sumamos (con monto 0 por ahora).
+      for (int i = 0; i < numCuotas; i++) {
+        _cuotas.add(CuotaModel(
+          numero: _cuotas.length + 1,
+          montoOriginal: 0,
+          montoPendiente: 0,
+        ));
       }
+
+      // SIEMPRE redistribuir todas las pendientes.
+      _redistribuirPendientes();
     });
   }
 
@@ -192,10 +179,6 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
     AppToast.success(context, 'Préstamo actualizado');
     Navigator.pop(context);
   }
-
-  // ─────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -483,10 +466,6 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// DIÁLOGO "AGREGAR MONTO"
-// ─────────────────────────────────────────────────────────────
-
 class _AgregarMontoResult {
   final double capital;
   final double aDevolver;
@@ -521,7 +500,7 @@ class _AgregarMontoDialog extends StatefulWidget {
 class _AgregarMontoDialogState extends State<_AgregarMontoDialog> {
   final _capitalCtrl = TextEditingController();
   final _aDevolverCtrl = TextEditingController();
-  final _cuotasCtrl = TextEditingController(text: '1');
+  final _cuotasCtrl = TextEditingController(text: '0');
 
   @override
   void dispose() {
@@ -539,17 +518,18 @@ class _AgregarMontoDialogState extends State<_AgregarMontoDialog> {
   double get _nuevoTotal => widget.totalActual + _aDevolver;
   double get _nuevoPendiente => _nuevoTotal - widget.montoPagado;
 
+  int get _cuotasFinales => widget.cuotasPendientes + _cuotas;
+
+  double get _montoPorCuota {
+    if (_cuotasFinales == 0) return 0;
+    return _nuevoPendiente / _cuotasFinales;
+  }
+
   bool get _valido =>
       _aDevolver > 0 &&
       _aDevolver >= _capital &&
       _cuotas >= 0 &&
       _cuotas <= 99;
-
-  /// Monto que queda en cada cuota pendiente si no se agregan cuotas nuevas.
-  double get _montoPorCuotaPendiente {
-    if (widget.cuotasPendientes == 0) return 0;
-    return _nuevoPendiente / widget.cuotasPendientes;
-  }
 
   void _aplicar() {
     if (!_valido) return;
@@ -565,8 +545,6 @@ class _AgregarMontoDialogState extends State<_AgregarMontoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final modoMismoPlazo = _cuotas == 0;
-
     return AlertDialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.large),
@@ -598,8 +576,8 @@ class _AgregarMontoDialogState extends State<_AgregarMontoDialog> {
               onChanged: (_) => setState(() {}),
               style: AppText.body,
               decoration: const InputDecoration(
-                labelText: 'Nuevas cuotas',
-                helperText: '0 = mismo plazo (se redistribuye)',
+                labelText: 'Nuevas cuotas (0 = mismo plazo)',
+                helperText: 'Se redistribuye todo entre las cuotas pendientes',
                 helperStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 prefixIcon: Icon(
                   Icons.format_list_numbered_rounded,
@@ -630,13 +608,13 @@ class _AgregarMontoDialogState extends State<_AgregarMontoDialog> {
                     color: AppColors.warning,
                     bold: true,
                   ),
-                  if (modoMismoPlazo && _nuevoPendiente > 0 && widget.cuotasPendientes > 0) ...[
+                  if (_nuevoPendiente > 0 && _cuotasFinales > 0) ...[
                     const SizedBox(height: 8),
                     Divider(color: AppColors.border, height: 1),
                     const SizedBox(height: 8),
                     _filaResumen(
-                      '${widget.cuotasPendientes} cuotas de',
-                      CurrencyFormatter.format(_montoPorCuotaPendiente),
+                      '$_cuotasFinales cuotas de',
+                      CurrencyFormatter.format(_montoPorCuota),
                       color: AppColors.teal,
                       bold: true,
                     ),
