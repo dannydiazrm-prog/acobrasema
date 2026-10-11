@@ -24,6 +24,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _busqueda = '';
   bool _recordatorioMostrado = false;
 
+  /// Índices de KPIs que el usuario reveló (0=prestado, 1=cobrado, 2=a cobrar).
+  final Set<int> _kpisRevelados = {};
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +39,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted || !necesita || _recordatorioMostrado) return;
     _recordatorioMostrado = true;
     _mostrarRecordatorio();
+  }
+
+  void _toggleKpi(int index) {
+    setState(() {
+      if (_kpisRevelados.contains(index)) {
+        _kpisRevelados.remove(index);
+      } else {
+        _kpisRevelados.add(index);
+      }
+    });
   }
 
   void _mostrarRecordatorio() {
@@ -128,10 +141,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        toolbarHeight: 96,
+        toolbarHeight: 110,
         title: const SizedBox(
-          height: 60,
-          width: 220,
+          height: 80,
+          width: 280,
           child: Image(
             image: AssetImage('assets/images/acobrasema.png'),
             fit: BoxFit.contain,
@@ -164,6 +177,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: CurrencyFormatter.format(totalPrestado),
                     icon: Icons.account_balance_wallet_outlined,
                     color: AppColors.navy,
+                    hidden: !_kpisRevelados.contains(0),
+                    onTap: () => _toggleKpi(0),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -173,6 +188,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: CurrencyFormatter.format(totalCobrado),
                     icon: Icons.trending_up_rounded,
                     color: AppColors.success,
+                    hidden: !_kpisRevelados.contains(1),
+                    onTap: () => _toggleKpi(1),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -182,6 +199,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     value: CurrencyFormatter.format(totalPorCobrar),
                     icon: Icons.schedule_rounded,
                     color: AppColors.warning,
+                    hidden: !_kpisRevelados.contains(2),
+                    onTap: () => _toggleKpi(2),
                   ),
                 ),
               ],

@@ -32,8 +32,6 @@ class AjustesScreen extends StatelessWidget {
         text: 'Respaldo de datos ACobraSema - ${CurrencyFormatter.formatDate(DateTime.now())}',
       );
 
-      // Marcamos la fecha del respaldo (no podemos saber si el usuario
-      // realmente compartió, pero al menos el recordatorio no molesta).
       await provider.marcarRespaldoHecho();
       if (!context.mounted) return;
       AppToast.info(context, 'Archivo listo para compartir');
@@ -81,80 +79,6 @@ class AjustesScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _forzarRecordatorio(BuildContext context) async {
-    final quiereRespaldar = await showDialog<bool>(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.large),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.teal.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.backup_rounded, color: AppColors.teal, size: 36),
-              ),
-              const SizedBox(height: 16),
-              Text('Respaldá tus datos', style: AppText.title.copyWith(fontSize: 20)),
-              const SizedBox(height: 8),
-              Text(
-                'Pasó una semana desde el último respaldo. Si se rompe el celular, podés perder todo.',
-                style: AppText.body.copyWith(color: AppColors.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text(
-                        'Más tarde',
-                        style: AppText.body.copyWith(fontSize: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                      ),
-                      onPressed: () => Navigator.pop(context, true),
-                      child: Text(
-                        'Respaldar',
-                        style: AppText.body.copyWith(
-                          fontSize: 13,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (!context.mounted) return;
-    if (quiereRespaldar == true) {
-      await _exportar(context);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -176,30 +100,29 @@ class AjustesScreen extends StatelessWidget {
             subtitle: 'Restaurar desde un archivo de respaldo',
             onTap: () => _importar(context),
           ),
-          _tile(
-            icon: Icons.notifications_active_outlined,
-            title: 'Probar recordatorio',
-            subtitle: 'Ver el aviso que aparece cada 7 días',
-            onTap: () => _forzarRecordatorio(context),
-          ),
-          const SizedBox(height: 24),
-          _section('Información'),
-          _tile(
-            icon: Icons.info_outline_rounded,
-            title: 'Versión',
-            subtitle: '1.0.0',
-            onTap: null,
-          ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 48),
           Center(
             child: Column(
               children: [
-                Text('ACobraSema', style: AppText.caption),
+                Text(
+                  '@Jplabs',
+                  style: AppText.caption.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('© 2026', style: AppText.caption.copyWith(fontSize: 11)),
+                Text(
+                  '© 2026 · Versión 1.0',
+                  style: AppText.caption.copyWith(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
+                ),
               ],
             ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

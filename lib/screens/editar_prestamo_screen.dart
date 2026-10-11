@@ -54,19 +54,16 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
   double get _prestadoActual => CurrencyFormatter.parse(_prestadoCtrl.text);
   double get _totalActual => CurrencyFormatter.parse(_devolverCtrl.text);
 
-  double get _montoPagado => _cuotas
-      .where((c) => c.estaPagada)
-      .fold(0.0, (s, c) => s + c.montoOriginal);
-
   double get _pendienteActual => _cuotas
       .where((c) => !c.estaPagada)
       .fold(0.0, (s, c) => s + c.montoPendiente);
 
+  /// Total pagado real = total a devolver - pendiente.
+  double get _montoPagado => _totalActual - _pendienteActual;
+
   List<CuotaModel> get _pendientes =>
       _cuotas.where((c) => !c.estaPagada).toList();
 
-  /// Redistribuye el monto pendiente (total - pagado) entre TODAS las cuotas
-  /// no pagadas de forma equitativa.
   void _redistribuirPendientes() {
     final total = _totalActual;
     final pendientes = _pendientes;
@@ -98,7 +95,6 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
       _prestadoCtrl.text = CurrencyFormatter.formatNumber(nuevoPrestado);
       _devolverCtrl.text = CurrencyFormatter.formatNumber(nuevoTotal);
 
-      // Si se agregaron cuotas nuevas, las sumamos (con monto 0 por ahora).
       for (int i = 0; i < numCuotas; i++) {
         _cuotas.add(CuotaModel(
           numero: _cuotas.length + 1,
@@ -107,7 +103,6 @@ class _EditarPrestamoScreenState extends State<EditarPrestamoScreen> {
         ));
       }
 
-      // SIEMPRE redistribuir todas las pendientes.
       _redistribuirPendientes();
     });
   }

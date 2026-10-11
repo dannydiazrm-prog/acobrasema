@@ -11,9 +11,6 @@ class CuotaModel {
     this.estaPagada = false,
   });
 
-  /// Cuánto se pagó efectivamente en esta cuota.
-  double get montoPagado => montoOriginal - montoPendiente;
-
   Map<String, dynamic> toJson() => {
         'numero': numero,
         'montoOriginal': montoOriginal,
@@ -49,8 +46,10 @@ class PrestamoModel {
   double get saldoPendiente =>
       cuotas.fold(0.0, (sum, c) => sum + c.montoPendiente);
 
-  double get totalPagado =>
-      cuotas.fold(0.0, (sum, c) => sum + c.montoPagado);
+  /// Total efectivamente pagado por el cliente.
+  /// Se calcula como lo que ya no se debe, así refleja también los
+  /// excedentes que se aplicaron a cuotas posteriores.
+  double get totalPagado => montoTotal - saldoPendiente;
 
   bool get estaLiquidado => cuotas.every((c) => c.estaPagada);
 
