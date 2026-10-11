@@ -3,30 +3,29 @@ class CuotaModel {
   double montoOriginal;
   double montoPendiente;
   bool estaPagada;
-  bool esParcial;
 
   CuotaModel({
     required this.numero,
     required this.montoOriginal,
     required this.montoPendiente,
     this.estaPagada = false,
-    this.esParcial = false,
   });
+
+  /// Cuánto se pagó efectivamente en esta cuota.
+  double get montoPagado => montoOriginal - montoPendiente;
 
   Map<String, dynamic> toJson() => {
         'numero': numero,
         'montoOriginal': montoOriginal,
         'montoPendiente': montoPendiente,
         'estaPagada': estaPagada,
-        'esParcial': esParcial,
       };
 
   factory CuotaModel.fromJson(Map<String, dynamic> json) => CuotaModel(
         numero: json['numero'],
-        montoOriginal: json['montoOriginal'],
-        montoPendiente: json['montoPendiente'],
-        estaPagada: json['estaPagada'],
-        esParcial: json['esParcial'] ?? false,
+        montoOriginal: (json['montoOriginal'] as num).toDouble(),
+        montoPendiente: (json['montoPendiente'] as num).toDouble(),
+        estaPagada: json['estaPagada'] ?? false,
       );
 }
 
@@ -47,13 +46,13 @@ class PrestamoModel {
     required this.cuotas,
   });
 
-  double get saldoPendiente {
-    return cuotas.fold(0.0, (sum, c) => sum + c.montoPendiente);
-  }
+  double get saldoPendiente =>
+      cuotas.fold(0.0, (sum, c) => sum + c.montoPendiente);
 
-  bool get estaLiquidado {
-    return cuotas.every((c) => c.estaPagada);
-  }
+  double get totalPagado =>
+      cuotas.fold(0.0, (sum, c) => sum + c.montoPagado);
+
+  bool get estaLiquidado => cuotas.every((c) => c.estaPagada);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -67,8 +66,8 @@ class PrestamoModel {
   factory PrestamoModel.fromJson(Map<String, dynamic> json) => PrestamoModel(
         id: json['id'],
         clienteNombre: json['clienteNombre'],
-        montoPrestado: json['montoPrestado'],
-        montoTotal: json['montoTotal'],
+        montoPrestado: (json['montoPrestado'] as num).toDouble(),
+        montoTotal: (json['montoTotal'] as num).toDouble(),
         fechaCreacion: DateTime.parse(json['fechaCreacion']),
         cuotas: (json['cuotas'] as List)
             .map((c) => CuotaModel.fromJson(c))

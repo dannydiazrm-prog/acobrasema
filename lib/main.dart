@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/prestamo_provider.dart';
 import 'screens/dashboard_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,18 +17,9 @@ class ACobraApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => PrestamoProvider(),
       child: MaterialApp(
-        title: 'ACobra',
+        title: 'ACobraSema',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF0F766E),
-            primary: const Color(0xFF0F766E),
-          ),
-          textTheme: GoogleFonts.plusJakartaSansTextTheme(
-            Theme.of(context).textTheme,
-          ),
-        ),
+        theme: AppTheme.build(),
         home: const DashboardScreen(),
       ),
     );

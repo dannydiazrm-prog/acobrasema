@@ -1,13 +1,14 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../models/prestamo_model.dart';
 import '../providers/prestamo_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/app_toast.dart';
+import '../utils/dialogs.dart';
 import '../utils/formatters.dart';
+import '../widgets/kpi_card.dart';
+import '../widgets/prestamo_card.dart';
+import 'ajustes_screen.dart';
 import 'crear_prestamo_screen.dart';
 import 'detalle_prestamo_screen.dart';
 import 'editar_prestamo_screen.dart';
@@ -21,153 +22,181 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String _busqueda = '';
+  bool _recordatorioMostrado = false;
 
-  Future<void> _exportarRespaldoWhatsApp(BuildContext context, PrestamoProvider provider) async {
-    try {
-      if (provider.prestamos.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay datos para respaldar.')));
-        return;
-      }
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _chequearRecordatorio());
+  }
 
-      final data = provider.prestamos.map((e) => e.toJson()).toList();
-      final jsonString = jsonEncode(data);
+  Future<void> _chequearRecordatorio() async {
+    final provider = Provider.of<PrestamoProvider>(context, listen: false);
+    final necesita = await provider.necesitaRespaldo();
+    if (!mounted || !necesita || _recordatorioMostrado) return;
+    _recordatorioMostrado = true;
+    _mostrarRecordatorio();
+  }
 
-      final directory = await getApplicationDocumentsDirectory();
-      final fechaStr = DateTime.now().toString().split('.')[0].replaceAll(':', '-');
-      final file = File('${directory.path}/respaldo_acobrasema_$fechaStr.json');
-      await file.writeAsString(jsonString);
-
-      await Share.shareXFiles([XFile(file.path)], text: '📁 Respaldo de datos - ACobraSema');
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al generar respaldo: $e')));
-    }
+  void _mostrarRecordatorio() {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.large),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.teal.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.backup_rounded, color: AppColors.teal, size: 36),
+              ),
+              const SizedBox(height: 16),
+              Text('Respaldá tus datos', style: AppText.title.copyWith(fontSize: 20)),
+              const SizedBox(height: 8),
+              Text(
+                'Pasó una semana desde el último respaldo. Si se rompe el celular, podés perder todo.',
+                style: AppText.body.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Más tarde'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AjustesScreen()),
+                        );
+                      },
+                      child: const Text('Respaldar'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<PrestamoProvider>(context);
     final prestamos = provider.prestamos;
-    final prestamosFiltrados = prestamos.where((p) => p.clienteNombre.toLowerCase().contains(_busqueda.toLowerCase())).toList();
+    final filtrados = prestamos
+        .where((p) => p.clienteNombre.toLowerCase().contains(_busqueda.toLowerCase()))
+        .toList();
 
-    // KPIs calculados sobre deudores activos
-    double totalActivoEnCalle = prestamos.fold(0.0, (sum, p) => sum + p.montoPrestado);
-    double totalPorCobrarActivo = prestamos.fold(0.0, (sum, p) => sum + p.saldoPendiente);
-    int totalClientesActivos = prestamos.length;
+    final totalPrestado = prestamos.fold(0.0, (s, p) => s + p.montoPrestado);
+    final totalPorCobrar = prestamos.fold(0.0, (s, p) => s + p.saldoPendiente);
+    final totalCobrado = prestamos.fold(0.0, (s, p) => s + p.totalPagado);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Image.asset('assets/images/acobrasema.png', height: 40, fit: BoxFit.contain),
-        centerTitle: true,
+        title: Image.asset('assets/images/acobrasema.png', height: 32, fit: BoxFit.contain),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_rounded, color: Color(0xFF0F766E)),
-            tooltip: 'Hacer Respaldo (WhatsApp)',
-            onPressed: () => _exportarRespaldoWhatsApp(context, provider),
+            icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AjustesScreen()),
+              );
+            },
           ),
         ],
       ),
       body: Column(
         children: [
-          // Tarjetas de Resumen Financiero
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.white,
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Row(
               children: [
-                Expanded(child: _buildMetricCard('Activos en Calle', CurrencyFormatter.format(totalActivoEnCalle), const Color(0xFF0F766E), Icons.wallet)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildMetricCard('Por Cobrar', CurrencyFormatter.format(totalPorCobrarActivo), const Color(0xFFD97706), Icons.pending_actions_outlined)),
-                const SizedBox(width: 8),
-                Expanded(child: _buildMetricCard('Deudores', '$totalClientesActivos', const Color(0xFF059669), Icons.people_outline)),
+                Expanded(
+                  child: KpiCard(
+                    label: 'Prestado',
+                    value: CurrencyFormatter.format(totalPrestado),
+                    icon: Icons.account_balance_wallet_outlined,
+                    color: AppColors.navy,
+                    highlighted: true,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KpiCard(
+                    label: 'Cobrado',
+                    value: CurrencyFormatter.format(totalCobrado),
+                    icon: Icons.trending_up_rounded,
+                    color: AppColors.success,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: KpiCard(
+                    label: 'Por cobrar',
+                    value: CurrencyFormatter.format(totalPorCobrar),
+                    icon: Icons.schedule_rounded,
+                    color: AppColors.warning,
+                  ),
+                ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
-          // Barra de Búsqueda
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: TextField(
-              onChanged: (val) => setState(() => _busqueda = val),
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF0F172A)),
+              onChanged: (v) => setState(() => _busqueda = v),
               decoration: InputDecoration(
-                hintText: 'Buscar cliente por nombre...',
-                hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8)),
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF0F766E)),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F766E), width: 1.5)),
+                hintText: 'Buscar cliente...',
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+                suffixIcon: _busqueda.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () => setState(() => _busqueda = ''),
+                      )
+                    : null,
               ),
             ),
           ),
-
-          // Lista de Préstamos Activos
           Expanded(
-            child: prestamosFiltrados.isEmpty
-                ? Center(
-                    child: Text('No hay préstamos registrados', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 16)),
-                  )
+            child: filtrados.isEmpty
+                ? _emptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: prestamosFiltrados.length,
-                    itemBuilder: (context, index) {
-                      final p = prestamosFiltrados[index];
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
-                          ],
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => DetallePrestamoScreen(prestamoId: p.id)),
-                            );
-                          },
-                          onLongPress: () {
-                            _mostrarOpcionesEdicionEliminacion(context, p);
-                          },
-                          title: Text(
-                            p.clienteNombre,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: const Color(0xFF0F172A),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    itemCount: filtrados.length,
+                    itemBuilder: (_, i) {
+                      final p = filtrados[i];
+                      return PrestamoCard(
+                        prestamo: p,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DetallePrestamoScreen(prestamoId: p.id),
                             ),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Prestado: ${CurrencyFormatter.format(p.montoPrestado)}',
-                                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13),
-                                ),
-                                Text(
-                                  'Debe: ${CurrencyFormatter.format(p.saldoPendiente)}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFFD97706),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                          );
+                        },
+                        onLongPress: () => _mostrarOpciones(p),
                       );
                     },
                   ),
@@ -175,115 +204,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF0F766E),
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CrearPrestamoScreen()),
           );
         },
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text('Nuevo Préstamo', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _buildMetricCard(String title, String value, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600, color: color),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _mostrarOpcionesEdicionEliminacion(BuildContext context, PrestamoModel prestamo) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              prestamo.clienteNombre,
-              style: GoogleFonts.plusJakartaSans(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.edit, color: Color(0xFF0F766E)),
-              title: Text('Ajustar / Editar Préstamo', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => EditarPrestamoScreen(prestamo: prestamo)),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: Text('Eliminar Préstamo', style: GoogleFonts.plusJakartaSans(color: Colors.red, fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmarEliminacion(context, prestamo.id, prestamo.clienteNombre);
-              },
-            ),
-          ],
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: Text(
+          'Nuevo Préstamo',
+          style: AppText.body.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
         ),
       ),
     );
   }
 
-  void _confirmarEliminacion(BuildContext context, String id, String nombre) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('¿Eliminar préstamo?', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-        content: Text('Estás a punto de eliminar el registro de $nombre. Esta acción no se puede deshacer.', style: GoogleFonts.plusJakartaSans()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B))),
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.navy.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.inbox_rounded, size: 56, color: AppColors.textMuted),
           ),
-          TextButton(
-            onPressed: () {
-              Provider.of<PrestamoProvider>(context, listen: false).eliminarPrestamo(id);
-              Navigator.pop(context);
-            },
-            child: Text('Eliminar', style: GoogleFonts.plusJakartaSans(color: Colors.red, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Text(
+            _busqueda.isEmpty ? 'Sin préstamos activos' : 'Sin resultados',
+            style: AppText.subtitle.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _busqueda.isEmpty
+                ? 'Tocá "Nuevo Préstamo" para empezar'
+                : 'Probá con otro nombre',
+            style: AppText.caption,
           ),
         ],
+      ),
+    );
+  }
+
+  void _mostrarOpciones(PrestamoModel prestamo) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.large)),
+      ),
+      backgroundColor: AppColors.surface,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(prestamo.clienteNombre, style: AppText.title.copyWith(fontSize: 18)),
+              const SizedBox(height: 16),
+              _opcion(
+                icon: Icons.edit_outlined,
+                label: 'Editar / Ajustar',
+                color: AppColors.navy,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditarPrestamoScreen(prestamo: prestamo),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              _opcion(
+                icon: Icons.delete_outline_rounded,
+                label: 'Eliminar',
+                color: AppColors.danger,
+                onTap: () async {
+                  Navigator.pop(context);
+                  final ok = await AppDialogs.confirm(
+                    context,
+                    title: '¿Eliminar préstamo?',
+                    message:
+                        'Se eliminará el registro de ${prestamo.clienteNombre}. Esta acción no se puede deshacer.',
+                    confirmText: 'Eliminar',
+                    icon: Icons.warning_amber_rounded,
+                  );
+                  if (ok && mounted) {
+                    await Provider.of<PrestamoProvider>(context, listen: false)
+                        .eliminarPrestamo(prestamo.id);
+                    if (mounted) AppToast.info(context, 'Préstamo eliminado');
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _opcion({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(AppRadius.medium),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 12),
+              Text(label, style: AppText.body.copyWith(color: color, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
       ),
     );
   }

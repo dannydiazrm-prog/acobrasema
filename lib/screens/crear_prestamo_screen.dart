@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/prestamo_model.dart';
 import '../providers/prestamo_provider.dart';
+import '../theme/app_theme.dart';
+import '../utils/app_toast.dart';
 import '../utils/formatters.dart';
 
 class CrearPrestamoScreen extends StatefulWidget {
@@ -15,137 +17,345 @@ class CrearPrestamoScreen extends StatefulWidget {
 
 class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nombreController = TextEditingController();
-  final _prestadoController = TextEditingController();
-  final _devolverController = TextEditingController();
-  final _cuotasController = TextEditingController(text: '1');
+  final _nombreCtrl = TextEditingController();
+  final _prestadoCtrl = TextEditingController();
+  final _devolverCtrl = TextEditingController();
+  final _cuotasCtrl = TextEditingController(text: '1');
+
+  List<double> _montosCuotas = [];
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _prestadoCtrl.dispose();
+    _devolverCtrl.dispose();
+    _cuotasCtrl.dispose();
+    super.dispose();
+  }
+
+  void _recalcularCuotasAuto() {
+    final total = CurrencyFormatter.parse(_devolverCtrl.text);
+    final n = int.tryParse(_cuotasCtrl.text) ?? 0;
+    if (total <= 0 || n <= 0) {
+      setState(() => _montosCuotas = []);
+      return;
+    }
+    final base = total / n;
+    final montos = List.generate(n, (_) => base.floorToDouble());
+    final suma = montos.fold(0.0, (s, v) => s + v);
+    montos[n - 1] += total - suma;
+
+    setState(() => _montosCuotas = montos);
+  }
+
+  void _editarCuotaManual(int index, double nuevoMonto) {
+    final total = CurrencyFormatter.parse(_devolverCtrl.text);
+    if (total <= 0) return;
+
+    final restante = total - nuevoMonto;
+    final otrasCuotas = _montosCuotas.length - 1;
+
+    if (otrasCuotas == 0) {
+      setState(() => _montosCuotas[index] = nuevoMonto);
+      return;
+    }
+
+    final montoPorOtra = restante / otrasCuotas;
+    final nuevos = List<double>.from(_montosCuotas);
+    nuevos[index] = nuevoMonto;
+
+    for (int i = 0; i < nuevos.length; i++) {
+      if (i != index) nuevos[i] = montoPorOtra.floorToDouble();
+    }
+
+    final suma = nuevos.fold(0.0, (s, v) => s + v);
+    final dif = total - suma;
+    for (int i = nuevos.length - 1; i >= 0; i--) {
+      if (i != index) {
+        nuevos[i] += dif;
+        break;
+      }
+    }
+
+    setState(() => _montosCuotas = nuevos);
+  }
+
+  Future<void> _guardar() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_montosCuotas.isEmpty) {
+      AppToast.error(context, 'Completá los datos para generar las cuotas');
+      return;
+    }
+
+    final cuotas = List.generate(_montosCuotas.length, (i) {
+      return CuotaModel(
+        numero: i + 1,
+        montoOriginal: _montosCuotas[i],
+        montoPendiente: _montosCuotas[i],
+      );
+    });
+
+    final nuevo = PrestamoModel(
+      id: const Uuid().v4(),
+      clienteNombre: _nombreCtrl.text.trim(),
+      montoPrestado: CurrencyFormatter.parse(_prestadoCtrl.text),
+      montoTotal: CurrencyFormatter.parse(_devolverCtrl.text),
+      fechaCreacion: DateTime.now(),
+      cuotas: cuotas,
+    );
+
+    await Provider.of<PrestamoProvider>(context, listen: false).agregarPrestamo(nuevo);
+    if (!mounted) return;
+    AppToast.success(context, 'Préstamo registrado');
+    Navigator.pop(context);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text('Nuevo Préstamo', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildTextField(
-                controller: _nombreController,
-                label: 'Nombre del Cliente',
-                icon: Icons.person_outline,
-                validator: (val) => val == null || val.isEmpty ? 'Ingresa el nombre' : null,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _prestadoController,
-                label: 'Monto Prestado (₲)',
-                icon: Icons.money,
-                keyboardType: TextInputType.number,
-                validator: (val) => val == null || val.isEmpty ? 'Ingresa el monto prestado' : null,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _devolverController,
-                label: 'Monto Total a Devolver (₲)',
-                icon: Icons.trending_up,
-                keyboardType: TextInputType.number,
-                validator: (val) => val == null || val.isEmpty ? 'Ingresa el monto a devolver' : null,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                controller: _cuotasController,
-                label: 'Número de Cuotas',
-                icon: Icons.format_list_numbered,
-                keyboardType: TextInputType.number,
-                validator: (val) => val == null || int.tryParse(val) == null || int.parse(val) <= 0
-                    ? 'Ingresa un número válido'
-                    : null,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F766E),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _guardarPrestamo,
-                child: Text(
-                  'Guardar Préstamo',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Nuevo Préstamo')),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Datos del cliente', style: AppText.subtitle),
+                  const SizedBox(height: 16),
+                  _textField(
+                    controller: _nombreCtrl,
+                    label: 'Nombre',
+                    icon: Icons.person_outline_rounded,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Datos del préstamo', style: AppText.subtitle),
+                  const SizedBox(height: 16),
+                  _moneyField(
+                    controller: _prestadoCtrl,
+                    label: 'Monto prestado',
+                    icon: Icons.account_balance_wallet_outlined,
+                    validator: (v) {
+                      final n = CurrencyFormatter.parse(v ?? '');
+                      return n <= 0 ? 'Ingresá un monto' : null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _moneyField(
+                    controller: _devolverCtrl,
+                    label: 'Monto a devolver',
+                    icon: Icons.trending_up_rounded,
+                    onChanged: (_) => _recalcularCuotasAuto(),
+                    validator: (v) {
+                      final n = CurrencyFormatter.parse(v ?? '');
+                      return n <= 0 ? 'Ingresá un monto' : null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _textField(
+                    controller: _cuotasCtrl,
+                    label: 'Número de cuotas',
+                    icon: Icons.format_list_numbered_rounded,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => _recalcularCuotasAuto(),
+                    validator: (v) {
+                      final n = int.tryParse(v ?? '');
+                      return (n == null || n <= 0) ? 'Ingresá al menos 1' : null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            if (_montosCuotas.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('Cuotas', style: AppText.subtitle),
+                        const Spacer(),
+                        Text(
+                          'Tocá para ajustar',
+                          style: AppText.caption.copyWith(color: AppColors.teal),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...List.generate(_montosCuotas.length, (i) => _cuotaEditable(i)),
+                  ],
                 ),
               ),
             ],
-          ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _guardar,
+              child: const Text('Guardar Préstamo'),
+            ),
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: GoogleFonts.plusJakartaSans(color: const Color(0xFF0F172A)),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B)),
-        prefixIcon: Icon(icon, color: const Color(0xFF0F766E)),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0F766E), width: 1.5)),
+  Widget _cuotaEditable(int index) {
+    final monto = _montosCuotas[index];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.navy,
+              borderRadius: BorderRadius.circular(AppRadius.small),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${index + 1}',
+              style: AppText.caption.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              CurrencyFormatter.format(monto),
+              style: AppText.body.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _editarMontoCuota(index, monto),
+            child: Text('Editar', style: AppText.caption.copyWith(color: AppColors.teal)),
+          ),
+        ],
       ),
     );
   }
 
-  void _guardarPrestamo() {
-    if (_formKey.currentState!.validate()) {
-      final double prestado = CurrencyFormatter.parse(_prestadoController.text);
-      final double total = CurrencyFormatter.parse(_devolverController.text);
-      final int numCuotas = int.parse(_cuotasController.text);
+  void _editarMontoCuota(int index, double actual) {
+    final ctrl = TextEditingController(text: actual.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.large),
+        ),
+        title: Text('Cuota ${index + 1}', style: AppText.title.copyWith(fontSize: 18)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(labelText: 'Monto'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final nuevo = CurrencyFormatter.parse(ctrl.text);
+              if (nuevo > 0) {
+                _editarCuotaManual(index, nuevo);
+              }
+              Navigator.pop(context);
+            },
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+  }
 
-      double montoBaseCuota = total / numCuotas;
-      List<CuotaModel> cuotas = [];
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.large),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.soft,
+      ),
+      child: child,
+    );
+  }
 
-      for (int i = 1; i <= numCuotas; i++) {
-        cuotas.add(CuotaModel(
-          numero: i,
-          montoOriginal: montoBaseCuota,
-          montoPendiente: montoBaseCuota,
-        ));
-      }
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+    void Function(String)? onChanged,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      validator: validator,
+      onChanged: onChanged,
+      style: AppText.body,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
+      ),
+    );
+  }
 
-      final nuevoPrestamo = PrestamoModel(
-        id: const Uuid().v4(),
-        clienteNombre: _nombreController.text.trim(),
-        montoPrestado: prestado,
-        montoTotal: total,
-        fechaCreacion: DateTime.now(),
-        cuotas: cuotas,
-      );
-
-      Provider.of<PrestamoProvider>(context, listen: false).agregarPrestamo(nuevoPrestamo);
-      Navigator.pop(context);
-    }
+  Widget _moneyField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? Function(String?)? validator,
+    void Function(String)? onChanged,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      validator: validator,
+      onChanged: (v) {
+        final formatted = CurrencyFormatter.formatInput(v);
+        controller.value = TextEditingValue(
+          text: formatted,
+          selection: TextSelection.collapsed(offset: formatted.length),
+        );
+        onChanged?.call(formatted);
+      },
+      style: AppText.body,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
+        suffixText: '₲',
+        suffixStyle: AppText.body.copyWith(color: AppColors.textSecondary),
+      ),
+    );
   }
 }
