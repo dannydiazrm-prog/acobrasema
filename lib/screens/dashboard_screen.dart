@@ -42,9 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.large),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.large)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -112,9 +110,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        toolbarHeight: 76,
         title: Image.asset(
           'assets/images/acobrasema.png',
-          height: 46,
+          height: 48,
           fit: BoxFit.contain,
         ),
         actions: [
@@ -127,13 +126,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
           Container(
             color: AppColors.surface,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Row(
               children: [
                 Expanded(
@@ -156,7 +156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: KpiCard(
-                    label: 'Por cobrar',
+                    label: 'A cobrar',
                     value: CurrencyFormatter.format(totalPorCobrar),
                     icon: Icons.schedule_rounded,
                     color: AppColors.warning,

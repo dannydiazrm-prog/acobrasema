@@ -83,45 +83,59 @@ class PrestamoProvider with ChangeNotifier {
   // ABONOS
   // ─────────────────────────────────────────────────────────
 
+  /// Resultado de intentar registrar un abono.
+  static const int abonoOk = 0;
+  static const int abonoLiquidado = 1;
+  static const int abonoExcedePendiente = 2;
+  static const int abonoError = 3;
+
   /// Registra un abono en la cuota indicada.
-  /// Retorna true si el préstamo quedó totalmente pagado.
-  Future<bool> registrarAbonoCuota(
+  /// Retorna:
+  ///   abonoLiquidado → préstamo pagado completo (se elimina)
+  ///   abonoOk        → abono registrado pero queda saldo
+  ///   abonoExcedePendiente → el monto era mayor al pendiente de la cuota
+  ///   abonoError     → cuota o préstamo no encontrado
+  Future<int> registrarAbonoCuota(
     String prestamoId,
     int numeroCuota,
     double montoAbonado,
   ) async {
     final index = _prestamos.indexWhere((p) => p.id == prestamoId);
-    if (index == -1) return false;
+    if (index == -1) return abonoError;
 
     final prestamo = _prestamos[index];
     final cuotaIdx = prestamo.cuotas.indexWhere((c) => c.numero == numeroCuota);
-    if (cuotaIdx == -1) return false;
+    if (cuotaIdx == -1) return abonoError;
 
     final cuota = prestamo.cuotas[cuotaIdx];
 
-    if (montoAbonado >= cuota.montoPendiente) {
-      // Pago completo (o de más): cierra la cuota y arrastra el excedente.
-      final excedente = montoAbonado - cuota.montoPendiente;
+    // Bug 7: no permitir pagar más que el pendiente de la cuota.
+    if (montoAbonado > cuota.montoPendiente) {
+      return abonoExcedePendiente;
+    }
+
+    if (montoAbonado == cuota.montoPendiente) {
+      // Pago exacto: cierra la cuota.
       cuota.montoPendiente = 0;
       cuota.estaPagada = true;
-
-      if (excedente > 0 && cuotaIdx + 1 < prestamo.cuotas.length) {
-        await registrarAbonoCuota(
-          prestamoId,
-          prestamo.cuotas[cuotaIdx + 1].numero,
-          excedente,
-        );
-      }
     } else {
-      // Pago parcial: registrar lo efectivamente pagado y arrastrar el faltante.
+      // Pago parcial: cierra la cuota con lo pagado y arrastra el faltante.
       final faltante = cuota.montoPendiente - montoAbonado;
       cuota.montoOriginal = montoAbonado;
       cuota.montoPendiente = 0;
       cuota.estaPagada = true;
 
       if (cuotaIdx + 1 < prestamo.cuotas.length) {
+        // Arrastrar a la siguiente cuota existente.
         prestamo.cuotas[cuotaIdx + 1].montoOriginal += faltante;
         prestamo.cuotas[cuotaIdx + 1].montoPendiente += faltante;
+      } else {
+        // Bug 6: es la última cuota, se crea una nueva con el faltante.
+        prestamo.cuotas.add(CuotaModel(
+          numero: cuota.numero + 1,
+          montoOriginal: faltante,
+          montoPendiente: faltante,
+        ));
       }
     }
 
@@ -131,7 +145,7 @@ class PrestamoProvider with ChangeNotifier {
     }
 
     await _guardar();
-    return liquidado;
+    return liquidado ? abonoLiquidado : abonoOk;
   }
 
   // ─────────────────────────────────────────────────────────

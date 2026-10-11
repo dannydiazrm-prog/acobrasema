@@ -19,8 +19,6 @@ class DetallePrestamoScreen extends StatelessWidget {
       builder: (context, provider, _) {
         final list = provider.prestamos.where((p) => p.id == prestamoId).toList();
 
-        // Si el préstamo ya no existe (se liquidó o se eliminó), mostramos
-        // una pantalla con un mensaje y botón de volver. NO hacemos pop acá.
         if (list.isEmpty) {
           return Scaffold(
             backgroundColor: AppColors.background,
@@ -40,11 +38,7 @@ class DetallePrestamoScreen extends StatelessWidget {
                       child: const Icon(Icons.check_rounded, color: AppColors.success, size: 48),
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      'Préstamo finalizado',
-                      style: AppText.title,
-                      textAlign: TextAlign.center,
-                    ),
+                    Text('Préstamo finalizado', style: AppText.title, textAlign: TextAlign.center),
                     const SizedBox(height: 8),
                     Text(
                       'Este préstamo ya no está en tu lista.',
@@ -115,10 +109,7 @@ class DetallePrestamoScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Saldo pendiente',
-            style: AppText.caption.copyWith(color: Colors.white.withOpacity(0.7)),
-          ),
+          Text('Saldo pendiente', style: AppText.caption.copyWith(color: Colors.white.withOpacity(0.7))),
           const SizedBox(height: 4),
           Text(
             CurrencyFormatter.format(saldo),
@@ -170,12 +161,10 @@ class DetallePrestamoScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _abrirAbono(
-    BuildContext context,
-    PrestamoModel p,
-    CuotaModel cuota,
-  ) async {
-    final ctrl = TextEditingController(text: cuota.montoPendiente.toStringAsFixed(0));
+  Future<void> _abrirAbono(BuildContext context, PrestamoModel p, CuotaModel cuota) async {
+    final ctrl = TextEditingController(
+      text: CurrencyFormatter.formatNumber(cuota.montoPendiente),
+    );
 
     final monto = await showDialog<double>(
       context: context,
@@ -196,7 +185,17 @@ class DetallePrestamoScreen extends StatelessWidget {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Monto a abonar', suffixText: '₲'),
+              onChanged: (v) {
+                final formatted = CurrencyFormatter.formatInput(v);
+                ctrl.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              },
+              decoration: const InputDecoration(
+                labelText: 'Monto a abonar',
+                suffixText: '₲',
+              ),
             ),
           ],
         ),
@@ -219,18 +218,30 @@ class DetallePrestamoScreen extends StatelessWidget {
     if (monto == null || monto <= 0) return;
     if (!context.mounted) return;
 
-    final liquidado = await Provider.of<PrestamoProvider>(context, listen: false)
+    // Bug 7: validar que no supere el pendiente.
+    if (monto > cuota.montoPendiente) {
+      AppToast.error(context, 'El monto no puede superar el pendiente');
+      return;
+    }
+
+    final resultado = await Provider.of<PrestamoProvider>(context, listen: false)
         .registrarAbonoCuota(p.id, cuota.numero, monto);
 
     if (!context.mounted) return;
 
-    if (liquidado) {
-      await AppDialogs.prestamoTerminado(context, p.clienteNombre);
-      if (context.mounted) {
-        Navigator.pop(context); // Volver al dashboard
-      }
-    } else {
-      AppToast.success(context, 'Abono registrado');
+    switch (resultado) {
+      case PrestamoProvider.abonoLiquidado:
+        await AppDialogs.prestamoTerminado(context, p.clienteNombre);
+        if (context.mounted) Navigator.pop(context);
+        break;
+      case PrestamoProvider.abonoOk:
+        AppToast.success(context, 'Abono registrado');
+        break;
+      case PrestamoProvider.abonoExcedePendiente:
+        AppToast.error(context, 'El monto supera el pendiente');
+        break;
+      default:
+        AppToast.error(context, 'No se pudo registrar el abono');
     }
   }
 }

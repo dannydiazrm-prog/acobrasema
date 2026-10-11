@@ -48,9 +48,15 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
     setState(() => _montosCuotas = montos);
   }
 
+  /// Edita una cuota manualmente, redistribuyendo el resto.
+  /// El monto no puede superar el monto total a devolver.
   void _editarCuotaManual(int index, double nuevoMonto) {
     final total = CurrencyFormatter.parse(_devolverCtrl.text);
     if (total <= 0) return;
+
+    // Cap: no puede superar el total.
+    if (nuevoMonto > total) nuevoMonto = total;
+    if (nuevoMonto <= 0) return;
 
     final restante = total - nuevoMonto;
     final otrasCuotas = _montosCuotas.length - 1;
@@ -82,16 +88,20 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_montosCuotas.isEmpty) {
-      AppToast.error(context, 'Completá los datos para generar las cuotas');
+
+    // Filtrar cuotas con monto 0 (por si el usuario cargó todo en una sola).
+    final cuotasValidas = _montosCuotas.where((m) => m > 0).toList();
+
+    if (cuotasValidas.isEmpty) {
+      AppToast.error(context, 'El monto total debe ser mayor a cero');
       return;
     }
 
-    final cuotas = List.generate(_montosCuotas.length, (i) {
+    final cuotas = List.generate(cuotasValidas.length, (i) {
       return CuotaModel(
         numero: i + 1,
-        montoOriginal: _montosCuotas[i],
-        montoPendiente: _montosCuotas[i],
+        montoOriginal: cuotasValidas[i],
+        montoPendiente: cuotasValidas[i],
       );
     });
 
@@ -160,7 +170,10 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
                     onChanged: (_) => _recalcularCuotasAuto(),
                     validator: (v) {
                       final n = CurrencyFormatter.parse(v ?? '');
-                      return n <= 0 ? 'Ingresá un monto' : null;
+                      final prestado = CurrencyFormatter.parse(_prestadoCtrl.text);
+                      if (n <= 0) return 'Ingresá un monto';
+                      if (n < prestado) return 'Debe ser ≥ al prestado';
+                      return null;
                     },
                   ),
                   const SizedBox(height: 12),
@@ -235,10 +248,7 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
             alignment: Alignment.center,
             child: Text(
               '${index + 1}',
-              style: AppText.caption.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppText.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(width: 12),
@@ -258,20 +268,38 @@ class _CrearPrestamoScreenState extends State<CrearPrestamoScreen> {
   }
 
   void _editarMontoCuota(int index, double actual) {
-    final ctrl = TextEditingController(text: actual.toStringAsFixed(0));
+    final total = CurrencyFormatter.parse(_devolverCtrl.text);
+    final ctrl = TextEditingController(text: CurrencyFormatter.formatNumber(actual));
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.large),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.large)),
         title: Text('Cuota ${index + 1}', style: AppText.title.copyWith(fontSize: 18)),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(labelText: 'Monto'),
-          autofocus: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Máximo: ${CurrencyFormatter.format(total)}',
+              style: AppText.caption,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              autofocus: true,
+              onChanged: (v) {
+                final formatted = CurrencyFormatter.formatInput(v);
+                ctrl.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              },
+              decoration: const InputDecoration(labelText: 'Monto', suffixText: '₲'),
+            ),
+          ],
         ),
         actions: [
           TextButton(

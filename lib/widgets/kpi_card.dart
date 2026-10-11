@@ -18,7 +18,7 @@ class KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.medium),
@@ -29,25 +29,13 @@ class KpiCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 14, color: color),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppText.caption.copyWith(fontSize: 11),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 15, color: color),
           ),
           const SizedBox(height: 10),
           FittedBox(
@@ -58,9 +46,17 @@ class KpiCard extends StatelessWidget {
               style: AppText.subtitle.copyWith(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: color,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.2,
               ),
             ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: AppText.caption.copyWith(fontSize: 11),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
